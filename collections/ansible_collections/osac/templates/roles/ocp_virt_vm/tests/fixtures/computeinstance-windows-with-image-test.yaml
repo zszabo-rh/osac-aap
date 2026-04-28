@@ -1,0 +1,15 @@
+---
+apiVersion: osac.openshift.io/v1alpha1
+kind: ComputeInstance
+metadata:
+  name: test-win-with-image
+  namespace: osac-system
+  annotations:
+    osac.openshift.io/guest-os-family: windows
+spec:
+  templateID: osac.templates.ocp_virt_vm
+  image:
+    sourceType: registry
+    sourceRef: "registry.example.com/osac/windows-golden:ltsc2022"
+status:
+  desiredConfigVersion: "1"

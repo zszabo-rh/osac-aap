@@ -1,7 +1,11 @@
 # Define the display name and description of the template
-title: Simple ComputeInstance Template
+title: OpenShift Virtualization ComputeInstance Template
 description: >
-  Simple ComputeInstance
+  Linux or Windows virtual machines on OpenShift Virtualization (KubeVirt).
+  Windows is detected from annotation osac.openshift.io/guest-os-family or when spec.image.sourceRef
+  contains the substring containerdisks/windows (informal community image naming). Windows
+  requires an explicit container disk reference in spec.image.sourceRef — there is no
+  Microsoft-official KubeVirt default image in this template.
 
 # Specify this is a ComputeInstance template (not a cluster template)
 template_type: compute_instance
