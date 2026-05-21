@@ -355,6 +355,18 @@ controller_templates: # noqa: var-naming[no-role-prefix]
     allow_simultaneous: false
     ask_variables_on_launch: true
     verbosity: 0
+  - name: "{{ aap_prefix }}-import-bcm-agents"
+    project: "{{ aap_prefix }}"
+    organization: "{{ aap_organization_name }}"
+    job_type: run
+    playbook: "playbook_osac_import_bcm_agents.yml"
+    inventory: "{{ aap_prefix }}-cluster-fulfillment"
+    execution_environment: "{{ aap_prefix }}-ee"
+    instance_groups:
+      - "{{ aap_prefix }}-cluster-fulfillment-ig"
+    allow_simultaneous: false
+    ask_variables_on_launch: true
+    verbosity: 0
 
 controller_job_template_surveys: # noqa: var-naming[no-role-prefix]
   - name: "{{ aap_prefix }}-create-hosted-cluster-post-install"
@@ -553,6 +565,12 @@ controller_schedules: # noqa: var-naming[no-role-prefix]
     unified_job_template: "{{ aap_prefix }}-import-agents"
     rrule: "DTSTART:20250331T144500Z RRULE:FREQ=MINUTELY;INTERVAL=10"
     enabled: "{{ osac_import_agents_enabled }}"
+  - name: "{{ aap_prefix }}-import-bcm-agents"
+    description: "Periodic BCM agent import reconciliation"
+    organization: "{{ aap_organization_name }}"
+    unified_job_template: "{{ aap_prefix }}-import-bcm-agents"
+    rrule: "DTSTART:20250519T120000Z RRULE:FREQ=MINUTELY;INTERVAL=10"
+    enabled: "{{ osac_import_bcm_agents_enabled }}"
 
 # Create custom execution environments
 controller_execution_environments: # noqa: var-naming[no-role-prefix]
@@ -605,6 +623,9 @@ controller_instance_groups: # noqa: var-naming[no-role-prefix]
               - name: import-agents-inventory
                 mountPath: /var/config/import-agents
                 readOnly: true
+              - name: bcm-certs
+                mountPath: /var/secrets/bcm-certs
+                readOnly: true
             env:
               - name: POD_NAMESPACE
                 valueFrom:
@@ -625,6 +646,10 @@ controller_instance_groups: # noqa: var-naming[no-role-prefix]
               - secretRef:
                   name: cluster-fulfillment-ig
         volumes:
+        - name: bcm-certs
+          secret:
+            secretName: bcm-certs
+            optional: true
         - name: kube-api-access
           projected:
             sources:
