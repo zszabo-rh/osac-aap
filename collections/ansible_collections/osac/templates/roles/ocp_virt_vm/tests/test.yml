@@ -19,6 +19,9 @@
 #
 #   Test 5 (Windows with explicit image accepted):
 #     ansible-playbook ... -e test_windows_with_image=true
+#
+#   Test 6 (security group labels propagated to VM):
+#     ansible-playbook ... -e test_create_sg_labels=true
 
 # ──────────────────────────────────────────────────────────────
 # Test 1: Verify spec defaults are merged into a minimal fixture
@@ -30,12 +33,19 @@
   collections:
     - osac.templates
 
+  vars:
+    compute_instance_label: "osac.openshift.io/computeinstance"
+
   tasks:
     - when: test_create_defaults | default(false) | bool
       block:
         - name: Read minimal ComputeInstance fixture (no spec fields)
           ansible.builtin.set_fact:
             compute_instance: "{{ lookup('file', 'fixtures/computeinstance-defaults-test.yaml') | from_yaml }}"
+
+        - name: Set compute instance name
+          ansible.builtin.set_fact:
+            compute_instance_name: "{{ compute_instance.metadata.name }}"
 
         - name: Run create_validate to merge defaults and extract VM config
           ansible.builtin.include_role:
@@ -93,12 +103,19 @@
   collections:
     - osac.templates
 
+  vars:
+    compute_instance_label: "osac.openshift.io/computeinstance"
+
   tasks:
     - when: test_create_validation_valid | default(false) | bool
       block:
         - name: Read minimal ComputeInstance fixture
           ansible.builtin.set_fact:
             compute_instance: "{{ lookup('file', 'fixtures/computeinstance-defaults-test.yaml') | from_yaml }}"
+
+        - name: Set compute instance name
+          ansible.builtin.set_fact:
+            compute_instance_name: "{{ compute_instance.metadata.name }}"
 
         - name: Set template parameters with valid exposed_ports
           ansible.builtin.set_fact:
@@ -156,6 +173,9 @@
   collections:
     - osac.templates
 
+  vars:
+    compute_instance_label: "osac.openshift.io/computeinstance"
+
   tasks:
     - when: test_windows_requires_image | default(false) | bool
       block:
@@ -170,6 +190,10 @@
             default_spec: "{{ _guest_os_windows_default_spec }}"
             default_arg_specs: "{{ _guest_os_windows_default_arg_specs }}"
             template_parameters: {}
+
+        - name: Set compute instance name
+          ansible.builtin.set_fact:
+            compute_instance_name: "{{ compute_instance.metadata.name }}"
 
         - name: Run create_validate (expect failure — no Windows container disk)
           block:
@@ -206,6 +230,9 @@
   collections:
     - osac.templates
 
+  vars:
+    compute_instance_label: "osac.openshift.io/computeinstance"
+
   tasks:
     - when: test_windows_with_image | default(false) | bool
       block:
@@ -221,6 +248,10 @@
             default_arg_specs: "{{ _guest_os_windows_default_arg_specs }}"
             template_parameters: {}
 
+        - name: Set compute instance name
+          ansible.builtin.set_fact:
+            compute_instance_name: "{{ compute_instance.metadata.name }}"
+
         - name: Run create_validate
           ansible.builtin.include_role:
             name: osac.templates.ocp_virt_vm
@@ -231,3 +262,77 @@
             that:
               - vm_image_source == "registry.example.com/osac/windows-golden:ltsc2022"
             fail_msg: "Expected vm_image_source from spec, got {{ vm_image_source | default('undefined') }}"
+
+# ──────────────────────────────────────────────────────────────
+# Test 6: Security group labels are propagated to default_vm_labels
+# Expected: default_vm_labels includes osac.openshift.io/<sg-ref>: ""
+#           for each securityGroupRef across all spec.networkAttachments
+# ──────────────────────────────────────────────────────────────
+- name: "Test ocp_virt_vm -- security group labels propagated to VM"
+  hosts: localhost
+
+  collections:
+    - osac.templates
+
+  vars:
+    compute_instance_label: "osac.openshift.io/computeinstance"
+
+  tasks:
+    - when: test_create_sg_labels | default(false) | bool
+      block:
+        - name: Read ComputeInstance fixture with security groups
+          ansible.builtin.set_fact:
+            compute_instance: "{{ lookup('file', 'fixtures/computeinstance-with-security-groups.yaml') | from_yaml }}"
+
+        - name: Set compute instance name
+          ansible.builtin.set_fact:
+            compute_instance_name: "{{ compute_instance.metadata.name }}"
+
+        - name: Run create_validate to extract VM config and build labels
+          ansible.builtin.include_role:
+            name: osac.templates.ocp_virt_vm
+            tasks_from: create_validate.yaml
+
+        - name: Verify compute instance base label is present
+          ansible.builtin.assert:
+            that:
+              - default_vm_labels is defined
+              - default_vm_labels['osac.openshift.io/computeinstance'] == 'test-vm-sgs'
+            fail_msg: >-
+              Expected default_vm_labels to contain osac.openshift.io/computeinstance=test-vm-sgs,
+              got {{ default_vm_labels | default('undefined') }}
+
+        - name: Verify securitygroup-web01 label is present in VM labels
+          ansible.builtin.assert:
+            that:
+              - "'osac.openshift.io/securitygroup-web01' in default_vm_labels"
+              - default_vm_labels['osac.openshift.io/securitygroup-web01'] == ''
+            fail_msg: >-
+              Expected default_vm_labels to contain osac.openshift.io/securitygroup-web01='',
+              got {{ default_vm_labels | default('undefined') }}
+
+        - name: Verify securitygroup-db01 label is present in VM labels
+          ansible.builtin.assert:
+            that:
+              - "'osac.openshift.io/securitygroup-db01' in default_vm_labels"
+              - default_vm_labels['osac.openshift.io/securitygroup-db01'] == ''
+            fail_msg: >-
+              Expected default_vm_labels to contain osac.openshift.io/securitygroup-db01='',
+              got {{ default_vm_labels | default('undefined') }}
+
+        - name: Verify securitygroup-mon01 label is present in VM labels
+          ansible.builtin.assert:
+            that:
+              - "'osac.openshift.io/securitygroup-mon01' in default_vm_labels"
+              - default_vm_labels['osac.openshift.io/securitygroup-mon01'] == ''
+            fail_msg: >-
+              Expected default_vm_labels to contain osac.openshift.io/securitygroup-mon01='',
+              got {{ default_vm_labels | default('undefined') }}
+
+        - name: Verify exactly 4 labels are set (computeinstance + 3 SGs)
+          ansible.builtin.assert:
+            that:
+              - default_vm_labels | length == 4
+            fail_msg: >-
+              Expected 4 labels in default_vm_labels (1 base + 3 SGs),
+              got {{ default_vm_labels | length }}: {{ default_vm_labels | default('undefined') }}
