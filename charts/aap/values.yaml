@@ -23,3 +23,7 @@ bootstrap:
 configAsCode:
   manifestSecret: "config-as-code-manifest-ig"
   secret: "config-as-code-ig"
+
+serviceAccounts:
+  osacSa: "osac-sa"
+  templatePublisher: "template-publisher"
