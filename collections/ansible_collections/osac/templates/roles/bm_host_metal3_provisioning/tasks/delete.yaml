@@ -1,11 +1,11 @@
 ---
 - name: Skip deprovisioning if externalHostID is not set
-  when: bare_metal_instance.spec.externalHostID | default('') | length == 0
+  when: bare_metal_instance.spec.externalHostID | default('', true) | length == 0
   ansible.builtin.debug:
     msg: "No externalHostID set, nothing to deprovision"
 
 - name: Deprovision bare metal host
-  when: bare_metal_instance.spec.externalHostID | default('') | length > 0
+  when: bare_metal_instance.spec.externalHostID | default('', true) | length > 0
   block:
     - name: Parse externalHostID into namespace and name
       ansible.builtin.set_fact:
